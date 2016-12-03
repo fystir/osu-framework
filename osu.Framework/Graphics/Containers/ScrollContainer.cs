@@ -188,8 +188,6 @@ namespace osu.Framework.Graphics.Containers
         private double averageDragTime;
         private double averageDragDelta;
 
-        private bool performFlickEvent;
-
         protected override bool OnDrag(InputState state)
         {
             Debug.Assert(isDragging, "We should never receive OnDrag if we are not dragging.");
@@ -203,20 +201,21 @@ namespace osu.Framework.Graphics.Containers
 
             lastDragTime = currentTime;
 
-            if (state.Mouse.RightButton)
-                scrollTo((state.Mouse.Position.Y - DrawRectangle.Y) / DrawHeight * scrollableExtent, false);
-            else if (state.Mouse.LeftButton)
-            {
-                Vector2 childDelta = ToLocalSpace(state.Mouse.NativeState.Position) - ToLocalSpace(state.Mouse.NativeState.LastPosition);
-                // If we are dragging past the extent of the scrollable area, half the offset
-                // such that the user can feel it.
-                if (target != clamp(target))
-                    childDelta /= 2;
+            OnDragBehavior(state);
 
-                offset(-childDelta.Y, false);
-                performFlickEvent = true;
-            }
             return true;
+        }
+
+        protected virtual void OnDragBehavior(InputState state)
+        {
+            Vector2 childDelta = ToLocalSpace(state.Mouse.NativeState.Position) - ToLocalSpace(state.Mouse.NativeState.LastPosition);
+
+            // If we are dragging past the extent of the scrollable area, half the offset
+            // such that the user can feel it.
+            if (target != clamp(target))
+                childDelta /= 2;
+
+            offset(-childDelta.Y, false);
         }
 
         protected override bool OnDragEnd(InputState state)
@@ -228,24 +227,26 @@ namespace osu.Framework.Graphics.Containers
             if (averageDragTime <= 0.0)
                 return true;
 
-            if (performFlickEvent)
-            {
-                performFlickEvent = false;
-                double velocity = averageDragDelta / averageDragTime;
+            OnDragEndBehavior(state);
 
-                // Detect whether we halted at the end of the drag and in fact should _not_
-                // perform a flick event.
-                const double VELOCITY_CUTOFF = 0.1;
-                if (Math.Abs(Math.Pow(0.95, Time.Current - lastDragTime) * velocity) < VELOCITY_CUTOFF)
-                    velocity = 0;
-
-                // Differentiate f(t) = distance * (1 - exp(-t)) w.r.t. "t" to obtain
-                // velocity w.r.t. time. Then rearrange to solve for distance given velocity.
-                double distance = velocity / (1 - Math.Exp(-DistanceDecayDrag));
-
-                offset((float)distance, true, DistanceDecayDrag);
-            }
             return true;
+        }
+
+        protected virtual void OnDragEndBehavior(InputState state)
+        {
+            double velocity = averageDragDelta / averageDragTime;
+
+            // Detect whether we halted at the end of the drag and in fact should _not_
+            // perform a flick event.
+            const double VELOCITY_CUTOFF = 0.1;
+            if (Math.Abs(Math.Pow(0.95, Time.Current - lastDragTime) * velocity) < VELOCITY_CUTOFF)
+                velocity = 0;
+
+            // Differentiate f(t) = distance * (1 - exp(-t)) w.r.t. "t" to obtain
+            // velocity w.r.t. time. Then rearrange to solve for distance given velocity.
+            double distance = velocity / (1 - Math.Exp(-DistanceDecayDrag));
+
+            offset((float)distance, true, DistanceDecayDrag);
         }
 
         protected override bool OnWheel(InputState state)
